@@ -1,0 +1,18 @@
+# Dane dostępowe i pliki poufne (również katalogi o innej wielkości liter).
+[Ss][Ee][Cc][Rr][Ee][Tt]/
+[Ss][Ee][Cc][Rr][Ee][Tt][Ss]/
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.log
+artifacts/
