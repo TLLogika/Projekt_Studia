@@ -1,0 +1,4 @@
+1. Databease we are working on is onnline, we are connecting to it by log pass etc in .env file 
+2. filse in Secret must be added to git ignore
+3. UI is stricte planed on UI.jpg as a starter
+4. Build of database is holy cannot be edited 

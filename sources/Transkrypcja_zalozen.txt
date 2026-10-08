@@ -1,0 +1,442 @@
+Proces rozpoczęcia semestru — doprecyzowana wersja
+1. Najpierw musi powstać konkretny semestr
+Około 03:47–05:03 omawiacie formularz „Dodawanie semestrów”.
+Na filmie rzeczywiście widać pola:
+- Nazwa semestru
+- Rok akademicki
+- Początek semestru
+- Koniec semestru
+- przełącznik Aktualny semestr
+- przełącznik Aktywny semestr
+- Znacznik czasu — automatyczny
+- Czas trwania — automatycznie wyliczany
+- przycisk Utwórz semestr
+To jest istotne, bo prowadzący mówi:
+„póki nie dodamy semestru, to te inne zadania z organizacji powinny być zablokowane”
+
+i chwilę później:
+„nie można organizacji semestru robić, jak nie ma włączonego semestru.”
+
+Czyli w systemie istnieją co najmniej dwa stany mające znaczenie:
+semestr istnieje oraz semestr jest aktywny/włączony.
+Dopiero dla takiego semestru wykonujemy właściwą organizację.
+2. Nie powinien to być sztywny kreator krok po kroku
+To bardzo ważne doprecyzowanie z 07:11–08:02.
+Karol tłumaczy, że nie chce mechanizmu podobnego do zakupu w sklepie:
+krok 1 → krok 2 → krok 3 → krok 4
+Pani w dziekanacie ma móc przygotowywać dane w wygodnej kolejności.
+Czyli może np.:
+- utworzyć potrzebne grupy,
+- przygotować przedmioty,
+- uzupełnić inne elementy,
+- a dopiero potem wejść w organizację semestru.
+Dopiero próba zakończenia organizacji powinna wymagać kompletu danych.
+To znaczy, że system powinien rozróżniać:
+przygotowanie danych słownikowych/organizacyjnych
+od:
+finalizacji organizacji konkretnego semestru.
+To jest trochę inny model niż w mojej poprzedniej odpowiedzi. Nie powinno być:
+utwórz semestr → program → przedmioty → grupy → wykładowcy → następny krok...
+jako obowiązkowego workflow ekranowego.
+To są raczej zależności danych, które finalnie muszą być spełnione.
+3. Program nauczania jest punktem wyjścia do określenia przedmiotów
+Około 08:08 prowadzący zauważa brak bardzo ważnego elementu:
+„tu jeszcze zabrakło nam pojęcia plan nauczania”
+
+Po przejściu do schematu bazy odnajduje tabelę:
+org.ProgramsOfStudies
+Na filmie można odczytać jej pola m.in.:
+Id
+ProgramName
+KRKNumber
+KRKName
+StartDate
+IsActive
+Timestamp
+OldId
+Description
+
+Czyli to, co podczas rozmowy jest nazywane zamiennie:
+planem nauczania / programem nauczania
+w bazie jest reprezentowane jako:
+ProgramsOfStudies.
+4. Przedmiot nie jest niezależny od programu nauczania
+To nagranie bardzo dobrze potwierdza.
+Tabela:
+org.Subjects
+ma na ekranie m.in.:
+Id
+Name
+ShortName
+Semester
+Exam
+Symbol
+Subsymbol
+EctsPoints
+NumberOfHours
+IsActive
+SubjectTypeId
+ProgramsOfStudyId
+StudiesId
+SpecializationId
+Timestamp
+OldId
+
+Kluczowe są tutaj:
+ProgramsOfStudyId
+StudiesId
+Semester
+SpecializationId
+
+Czyli przedmiot sam niesie informację:
+do którego programu należy,
+na jakich studiach występuje,
+na którym semestrze,
+oraz ewentualnie dla jakiej specjalizacji.
+To bardzo mocno precyzuje algorytm.
+5. Jak system ma określić przedmioty do organizacji
+Prowadzący właściwie dyktuje ten algorytm w 10:56–11:40.
+Przykład:
+chcemy zorganizować:
+pierwszy semestr studiów magisterskich.
+Wtedy system powinien:
+1. ustalić obowiązujący program nauczania;
+2. pobrać Subjects przypisane do tego programu przez ProgramsOfStudyId;
+3. ograniczyć je do odpowiedniego rodzaju studiów przez StudiesId;
+4. wybrać te, dla których Semester = 1;
+5. ewentualnie uwzględnić specjalizację;
+6. z tak otrzymanej listy utworzyć przedmioty realizowane w konkretnym semestrze.
+Czyli można to zapisać jako:
+Program nauczania
+        +
+Rodzaj studiów
+        +
+Numer semestru studiów
+        +
+ew. specjalizacja
+        ↓
+Lista przedmiotów do realizacji
+
+To jest jeden z najważniejszych fragmentów całego spotkania.
+6. Nowy program nauczania = nowe rekordy przedmiotów
+To również jest jednoznaczne.
+Przykład z rozmowy:
+jeśli „Podstawy sztucznej inteligencji” istnieją w programie 2023 i później powstaje nowy program 2027, to nawet jeżeli nazwa przedmiotu jest taka sama:
+Program 2023
+    → Subject ID 1
+    → Podstawy sztucznej inteligencji
+
+Program 2027
+    → Subject ID 2
+    → Podstawy sztucznej inteligencji
+
+Prowadzący mówi około 12:17:
+„Jeżeli jest nowy program nauczania, to przedmioty powstają nowe.”
+
+Czyli przy analizie danych nie można utożsamiać przedmiotów wyłącznie po nazwie.
+To ma później znaczenie np. dla:
+- ocen,
+- zaliczeń,
+- analiz historycznych,
+- studentów wracających po zmianie programu.
+7. Następnie powstają „Przedmioty w semestrze”
+Tutaj film pozwala poprawić nazwę tabeli, której wcześniej nie byliśmy pewni.
+Na ekranie około 24:10 widać dokładnie:
+org.SubjectsSemesters
+Pola:
+Id
+SubjectId
+SemesterId
+NumberOfHybridHours
+NumberOfPlanningHours
+IsActive
+Timestamp
+SemesterNumber
+OldId
+
+To jest bardzo ważna tabela.
+Ona mówi już nie:
+„ten przedmiot istnieje w programie”
+
+tylko:
+„ten konkretny przedmiot jest realizowany w tym konkretnym semestrze”.
+
+Czyli:
+Subjects
+    ↓
+SubjectsSemesters
+    ↓
+konkretna realizacja przedmiotu
+w konkretnym semestrze
+
+To dokładnie odpowiada widocznej w menu funkcji:
+Przedmioty → Przedmioty w semestrze.
+8. NumberOfPlanningHours jest podstawą kontroli semestru
+Prowadzący zatrzymuje się przy tym polu około 24:13.
+Na filmie widać:
+NumberOfHybridHours
+NumberOfPlanningHours
+
+I tłumaczy, że hybrydowe godziny nie są istotne dla omawianego bilansowania.
+Natomiast:
+NumberOfPlanningHours
+to:
+liczba godzin, które muszą znaleźć się w planie.
+
+Przykład:
+SubjectSemester:
+Bazy danych
+NumberOfPlanningHours = 30
+
+oznacza:
+dla tej konkretnej realizacji przedmiotu w tym semestrze system musi finalnie zaplanować 30 godzin.
+
+To nie jest więc tylko informacja opisowa.
+To jest wartość kontrolna dla harmonogramu.
+9. Grupy też są związane z konkretnym semestrem
+Film pokazuje również tabelę:
+org.Groups
+Widać m.in.:
+Id
+Name
+SemesterNumber
+IsActive
+StudiesId
+SemesterId
+SpecializationId
+...
+
+To jest bardzo istotne doprecyzowanie.
+Grupa nie jest po prostu abstrakcyjnym:
+Grupa A
+tylko może być powiązana z:
+konkretnym SemesterId
+rodzajem studiów
+numerem semestru
+specjalizacją
+
+Czyli przy organizacji semestru system może mieć np.:
+Semestr organizacyjny: 2026/2027 zimowy
+
+Grupa: INZ-1A
+Studia: inżynierskie
+SemesterNumber: 1
+SemesterId: [semestr zimowy 2026/27]
+
+10. Co właściwie oznacza „Organizacja semestru”
+Po przejrzeniu całego fragmentu interpretowałbym to teraz dokładniej tak:
+SEMESTR
+↓
+wybór tego, co w nim realizujemy
+↓
+PRZEDMIOTY W SEMESTRZE
++
+GRUPY
++
+WYKŁADOWCY
+↓
+ORGANIZACJA SEMESTRU
+
+Organizacja spina więc przede wszystkim:
+co,
+dla kogo,
+przez kogo
+ma zostać zrealizowane.
+Natomiast szczegółowe:
+kiedy
+wchodzi już w harmonogram.
+11. Dopiero później harmonogram zajęć
+W 17:39 prowadzący mówi już bardzo konkretnie o:
+„programie na semestr, każda godzina zajęć każdego wykładowcy”.
+
+I proponuje wykorzystanie istniejących plików dziekanatu.
+Ma plany m.in. dla różnych toków studiów.
+Plan testowy miałby zostać zaimportowany do systemu.
+Przed importem muszą jednak istnieć w bazie przynajmniej:
+semestr
+przedmioty
+przedmioty w semestrze
+grupy
+wykładowcy
+
+To zgadza się też z wcześniejszą wypowiedzią 06:43–07:04:
+plik z organizacją zajęć można „łyknąć do bazy”, ale wcześniej muszą powstać semestry, przedmioty w semestrze itd.
+
+12. Dane testowe do importu
+Tutaj nagranie również doprecyzowuje, co ma być prawdziwe, a co fikcyjne.
+Prowadzący proponuje:
+przedmioty — rzeczywiste,
+wykładowcy — fikcyjni / zanonimizowani,
+grupy — wygenerowane zgodnie z tymi występującymi w planie.
+Około 19:44–20:04:
+wykładowców zamienić na fikcyjnych,
+przedmioty będą faktyczne,
+grupy wygenerować zgodnie z tym, co jest używane.
+
+Czyli plan zeszłego semestru może służyć jako realistyczny dataset testowy.
+13. Arkusz dziekanatu nie odpowiada 1:1 strukturze bazy
+To też jest bardzo ważne technicznie.
+Arkusz został stworzony tak, żeby:
+był czytelny dla wykładowców,
+
+a nie po to, żeby:
+łatwo zaimportować go do relacyjnej bazy.
+
+Dlatego potrzebna jest transformacja danych.
+Przykład ze spotkania:
+Excel:
+08:00–09:30
+
+może reprezentować dwa sloty/godziny.
+W bazie:
+rekord 1 → pierwsza godzina
+rekord 2 → druga godzina
+
+Prowadzący mówi około 21:14:
+„tutaj są 2 godziny, z tego muszą być 2 wiersze.”
+
+To jest kluczowe wymaganie importera.
+14. Dlaczego każda godzina ma być osobnym rekordem
+To nie jest przypadek.
+Około 13:23–13:45 prowadzący mówi, że do analityki potrzebny jest:
+„kalendarz zajęć, nawet każda godzina zajęć”
+
+ponieważ zajęcia mogą być odwoływane.
+Czyli najmniejszą istotną jednostką systemu jest:
+pojedyncza godzina zajęć.
+Nie tylko:
+Przedmiot ma zajęcia w piątek.
+
+ale raczej:
+Przedmiot X
+Grupa Y
+Wykładowca Z
+Data D
+Slot/godzina 1
+
+Przedmiot X
+Grupa Y
+Wykładowca Z
+Data D
+Slot/godzina 2
+
+Dzięki temu można zarządzać każdą godziną niezależnie.
+15. Rezultatem jest pełny rozkład zajęć
+Prowadzący mówi to dosłownie około 21:56:
+„dostajemy pełny rozkład zajęć.”
+
+I dopiero z tego rozkładu można tworzyć różne widoki.
+Dla studenta:
+student
+↓
+grupy, do których należy
+↓
+zajęcia tych grup
+↓
+plan studenta
+
+Dla wykładowcy:
+wykładowca
+↓
+jego przydzielone zajęcia
+↓
+jego kalendarz
+
+Dla dziekanatu:
+dzień
+↓
+wszystkie zajęcia
+↓
+zarządzanie realizacją
+
+Ważna korekta do mojej poprzedniej odpowiedzi
+Nie wynika ze spotkania, że przypisanie studentów do grup jest konieczne do zakończenia samej organizacji semestru.
+Jest ono potrzebne do późniejszego pokazania indywidualnego planu studenta.
+To rozróżnienie jest istotne.
+16. Odwołanie zajęć
+Po stworzeniu harmonogramu zaczyna się właściwe zarządzanie realizacją semestru.
+Osoba z odpowiednimi uprawnieniami w dziekanacie może zaznaczyć konkretną godzinę jako:
+odwołaną.
+Prowadzący mówi, że wtedy godzina powinna pojawić się jako:
+nieprzydzielona.
+Następnie:
+odwołana godzina
+↓
+brakuje jej w bilansie
+↓
+dziekanat wyznacza odróbkę
+↓
+godzina dostaje nowy termin
+↓
+ponownie wchodzi do bilansu
+
+To tłumaczy, dlaczego harmonogram musi operować na pojedynczych godzinach.
+17. Bilans przedmiotu
+To prawdopodobnie jeden z najważniejszych mechanizmów całej aplikacji.
+Dla każdego rekordu SubjectsSemesters mamy:
+NumberOfPlanningHours
+
+czyli np.:
+30 godzin wymaganych
+
+Harmonogram zawiera natomiast rzeczywiście przypisane godziny.
+System powinien więc móc policzyć:
+wymagane        30
+zaplanowane     30
+odwołane         2
+do wykonania    10
+nieprzydzielone  2
+
+Prowadzący wprost wymienia analitykę:
+czy godziny zaplanowane są zgodne z godzinami przypisanymi do przedmiotów w semestrze,
+
+oraz:
+ile odwołanych, ile ma jeszcze do wykonania.
+
+To daje bardzo konkretny przyszły moduł:
+kontrola realizacji programu semestru.
+Cały proces po korekcie
+Gdybym teraz miał z tego spotkania zrobić jedną finalną specyfikację biznesową, wyglądałaby tak:
+1. Dziekanat tworzy semestr — podaje nazwę, rok akademicki, daty początku i końca oraz ustawia jego stan.
+2. Semestr musi istnieć i być aktywny, zanim można przeprowadzić jego właściwą organizację.
+3. Niezależnie przygotowywane są dane potrzebne do organizacji: programy nauczania, przedmioty, grupy, typy grup itd. Nie musi to być liniowy kreator.
+4. Dla organizowanego toku należy ustalić właściwy program nauczania (ProgramsOfStudies).
+5. Z Subjects wybierane są przedmioty należące do tego programu, odpowiedniego rodzaju studiów i odpowiedniego numeru semestru.
+6. Dla tych przedmiotów tworzone są rekordy SubjectsSemesters, czyli konkretne realizacje przedmiotów w konkretnym semestrze.
+7. Każdy taki rekord określa m.in. NumberOfPlanningHours, czyli wymaganą liczbę godzin do umieszczenia w planie.
+8. Tworzone/przygotowywane są grupy związane z konkretnym semestrem, rodzajem studiów, numerem semestru i ewentualnie specjalizacją.
+9. W Organizacji semestru przygotowane wcześniej elementy są spinane w spójną całość. System nie powinien pozwolić zakończyć tego etapu, jeśli brakuje wymaganych danych.
+10. Następnie powstaje Harmonogram semestru, czyli konkretne terminy realizacji organizacji.
+11. Harmonogram może zostać zasilony danymi z plików dziekanatu; przy imporcie należy dopasować przedmioty, grupy i wykładowców do rekordów istniejących w bazie.
+12. Zakresy godzin z Excela muszą być rozbite na pojedyncze jednostki — każda godzina zajęć ma być osobnym rekordem.
+13. Powstaje pełny rozkład zajęć, z którego można generować kalendarze dla grup, studentów, wykładowców i dziekanatu.
+14. W trakcie semestru pojedyncza godzina może zostać odwołana i przejść do puli wymagającej ponownego przydzielenia.
+15. Po wyznaczeniu odróbki godzina ponownie trafia do harmonogramu.
+16. Przez cały semestr system porównuje liczbę godzin wymaganych (NumberOfPlanningHours) z godzinami zaplanowanymi/wykonanymi, dając bieżący bilans realizacji semestru.
+Czyli najkrócej
+Program nauczania
+        ↓
+Przedmioty programu
+        ↓
+wybór: studia + numer semestru
+        ↓
+SubjectsSemesters
+(wymagana liczba godzin)
+        │
+        ├──── Grupy
+        │
+        └──── Wykładowcy
+        ↓
+ORGANIZACJA SEMESTRU
+        ↓
+HARMONOGRAM SEMESTRU
+        ↓
+pojedyncze godziny zajęć
+        ↓
+pełny rozkład
+        ↓
+odwołania / odróbki
+        ↓
+BILANS REALIZACJI
+
+I po nagraniu jestem znacznie bardziej przekonany, że to właśnie jest właściwy sens „rozpoczęcia semestru” w tym projekcie: nie pojedyncza operacja „Start semester”, tylko przygotowanie danych → organizacja → wygenerowanie harmonogramu → późniejsze pilnowanie realizacji godzin.

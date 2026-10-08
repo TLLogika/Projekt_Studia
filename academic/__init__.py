@@ -1,0 +1,1 @@
+"""Moduły systemu obsługi studiów."""
