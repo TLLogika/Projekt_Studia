@@ -295,3 +295,52 @@ class AuthService:
             permitted = [item for item in items if self._allowed(connection, user, item["Code"], "view")]
             self._session(token)
             return permitted
+
+    def presentation(self, token: str) -> tuple[User, list[dict], dict]:
+        """Jedno połączenie dla profilu, menu i wszystkich akcji UI.
+
+        Wynik dotyczy bieżącego renderowania. Zapisy nadal używają require()
+        i sprawdzają aktualne uprawnienia we własnej transakcji.
+        """
+        self._session(token)
+        with self.db.connection() as connection:
+            user = self._get_user(token, connection)
+            rows = query(connection, f"""
+                SELECT si.Id,si.ParentItemId,si.Code,si.Name,si.Route,
+                       si.ComponentKey,si.SortOrder,si.ShowInMenu,actions.ActionCode,
+                       CASE WHEN EXISTS (
+                         SELECT 1 FROM org.PersonPermissionOverrides o
+                         WHERE o.PersonId=? AND o.SystemItemId=si.Id
+                           AND o.ActionCode=actions.ActionCode AND o.IsAllowed=0 AND o.IsActive=1
+                           AND (o.ValidFrom IS NULL OR o.ValidFrom<=SYSUTCDATETIME())
+                           AND (o.ValidTo IS NULL OR o.ValidTo>SYSUTCDATETIME())
+                       ) THEN 1 ELSE 0 END AS HasDeny,
+                       CASE WHEN EXISTS (
+                         SELECT 1 FROM org.PersonPermissionOverrides o
+                         WHERE o.PersonId=? AND o.SystemItemId=si.Id
+                           AND o.ActionCode=actions.ActionCode AND o.IsAllowed=1 AND o.IsActive=1
+                           AND (o.ValidFrom IS NULL OR o.ValidFrom<=SYSUTCDATETIME())
+                           AND (o.ValidTo IS NULL OR o.ValidTo>SYSUTCDATETIME())
+                       ) THEN 1 ELSE 0 END AS HasAllow,
+                       CASE WHEN EXISTS (
+                         SELECT 1 FROM org.PersonRoles pr
+                         JOIN org.Roles r ON r.Id=pr.RoleId
+                         JOIN org.RolePermissions rp ON rp.RoleId=r.Id
+                         WHERE pr.PersonId=? AND {_PERSON_ROLES_VALID}
+                           AND rp.SystemItemId=si.Id AND rp.ActionCode=actions.ActionCode AND rp.IsActive=1
+                       ) THEN 1 ELSE 0 END AS HasRole
+                FROM org.SystemItems si
+                CROSS JOIN (VALUES ('view'),('create'),('update')) actions(ActionCode)
+                WHERE si.IsActive=1 ORDER BY si.SortOrder,si.Name,si.Code,actions.ActionCode
+            """, (user.person_id, user.person_id, user.person_id))
+            permissions = {
+                (row['Code'], row['ActionCode']): bool(not row['HasDeny'] and (row['HasAllow'] or row['HasRole']))
+                for row in rows
+            }
+            menu = [
+                {key: row[key] for key in ('Id','ParentItemId','Code','Name','Route','ComponentKey','SortOrder')}
+                for row in rows if row['ActionCode']=='view' and row['ShowInMenu']
+                and permissions[(row['Code'], 'view')]
+            ]
+            self._session(token)
+            return user, menu, permissions

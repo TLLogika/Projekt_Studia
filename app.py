@@ -26,6 +26,7 @@ from academic.ui.importing import render_importing
 from academic.ui.calendar import render_calendar
 from academic.notes.service import NotesService
 from academic.ui.notes import render_notes
+from academic.ui.cache import cached_service, invalidate_reads
 
 st.set_page_config(page_title="Organizacja semestru", layout="wide", initial_sidebar_state="expanded")
 apply_styles()
@@ -105,8 +106,11 @@ def main():
         return
 
     try:
-        user = auth.get_user(token)
-        menu = auth.menu(token)
+        permissions = None
+        if hasattr(auth, "presentation"):
+            user, menu, permissions = auth.presentation(token)
+        else:
+            user, menu = auth.get_user(token), auth.menu(token)
         available = available_modules(menu, database.settings.semesters_item_code)
     except AuthenticationError as error:
         logout(auth)
@@ -148,6 +152,9 @@ def main():
                     if st.button(module.title, key="nav_" + module.key, use_container_width=True):
                         st.session_state["_module"] = module.key
         st.divider()
+        if st.button("Odśwież dane", key="refresh_data", use_container_width=True):
+            invalidate_reads(database)
+            st.rerun()
         st.button("Wyloguj się", on_click=logout, args=(auth,), use_container_width=True)
 
     selected = next((module for module in available if module.key == st.session_state["_module"]), None)
@@ -159,9 +166,9 @@ def main():
         return
     try:
         if selected.kind == "semesters":
-            render_semesters(semesters, token)
+            render_semesters(cached_service(semesters, "semesters", token, permissions), token)
         else:
-            service = module_services()[selected.kind]
+            service = cached_service(module_services()[selected.kind], selected.kind, token, permissions)
             if selected.kind == "catalog":
                 render_catalogs(service, token, selected.key)
             elif selected.kind == "organization":

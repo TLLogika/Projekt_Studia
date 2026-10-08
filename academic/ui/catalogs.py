@@ -5,7 +5,7 @@ from decimal import Decimal
 
 import streamlit as st
 
-from academic.catalogs.specs import CATALOGS
+from academic.catalogs.specs import CATALOGS, TABLE_SPECS
 from academic.errors import ApplicationError
 
 
@@ -53,12 +53,13 @@ def _filtered_choices(rows, field, draft, selected, allow_inactive_semester=Fals
     return result
 
 
-def _field(service, token, spec, field, current, draft):
+def _field(service, token, spec, field, current, draft, choice_rows=None):
     value = current.get(field.name) if current else None
     widget_key = _prefix(spec.key) + "field_" + field.name
     label = field.label + (" *" if field.required else "")
     if field.kind == "reference":
-        rows = _filtered_choices(service.choices(token, spec.key, field.name), field, draft, value, spec.table != "SubjectsSemesters")
+        choices = choice_rows[field.name] if choice_rows is not None else service.choices(token, spec.key, field.name)
+        rows = _filtered_choices(choices, field, draft, value, spec.table != "SubjectsSemesters")
         options = [None] + [str(row["Id"]) for row in rows]
         lookup = {str(row["Id"]): row for row in rows}
         selected = str(value) if value is not None else None
@@ -71,7 +72,9 @@ def _field(service, token, spec, field, current, draft):
             return row["_label"] + marker + " · " + item[:8]
         result = st.selectbox(label, options, index=index, format_func=title, key=widget_key)
         if field.required and not rows:
-            st.caption(f"Brak danych dla pola „{field.label}”. Uzupełnij powiązany katalog.")
+            related_spec = TABLE_SPECS.get(field.reference)
+            location = f"{related_spec.group} → {related_spec.title}" if related_spec else "Semestr"
+            st.caption(f"Brak danych dla pola „{field.label}”. Dodaj aktywny rekord w: {location}.")
         return result
     if field.kind == "boolean":
         return st.toggle(label, value=bool(value) if value is not None else field.name == "IsActive", key=widget_key)
@@ -79,8 +82,8 @@ def _field(service, token, spec, field, current, draft):
         return st.date_input(label, value=_as_date(value), format="DD.MM.YYYY", key=widget_key)
     if field.kind in {"integer", "decimal"}:
         if spec.table == "Subjects" and field.name == "Semester":
-            studies_id = st.session_state.get(_prefix(spec.key) + "field_StudiesId", current.get("StudiesId") if current else None)
-            study_rows = service.choices(token, spec.key, "StudiesId")
+            studies_id = draft.get("StudiesId", st.session_state.get(_prefix(spec.key) + "field_StudiesId", current.get("StudiesId") if current else None))
+            study_rows = choice_rows["StudiesId"] if choice_rows is not None else service.choices(token, spec.key, "StudiesId")
             study = next((row for row in study_rows if str(row["Id"]) == str(studies_id)), None)
             count = study.get("NumberOfSemesters", 0) if study else 0
             options = [None] + list(range(1, count + 1))
@@ -105,13 +108,30 @@ def _render_editor(service, token, spec, current):
     with st.container(border=True):
         st.subheader("Edycja" if current else "Dodawanie")
         st.caption("* Pole wymagane")
+        choice_rows = service.editor_choices(token, spec.key) if hasattr(service, 'editor_choices') else None
         draft = {}
+        parents = {
+            'Subjects': {'StudiesId'}, 'Groups': {'StudiesId'},
+            'LectureGroups': {'SemesterId'}, 'SubjectsSemesters': {'SemesterId'},
+        }.get(spec.table, set())
+        # Tylko wybór określający dostępne opcje odświeża formularz.
         for field in spec.fields:
-            draft[field.name] = _field(service, token, spec, field, current, draft)
-        st.text_input("Znacznik czasu (Timestamp)", value=_timestamp(current.get("Timestamp")) if current else "",
-            placeholder="Nadawany automatycznie", disabled=True, key=_prefix(spec.key) + "timestamp")
+            if field.name in parents:
+                draft[field.name] = _field(service, token, spec, field, current, draft, choice_rows)
+        with st.form(_prefix(spec.key) + 'form', border=False):
+            for field in spec.fields:
+                if field.name not in parents:
+                    draft[field.name] = _field(service, token, spec, field, current, draft, choice_rows)
+            st.text_input("Znacznik czasu (Timestamp)", value=_timestamp(current.get("Timestamp")) if current else "",
+                placeholder="Nadawany automatycznie", disabled=True, key=_prefix(spec.key) + "timestamp")
+            left, right = st.columns([3, 1])
+            with left:
+                submitted = st.form_submit_button("Zapisz zmiany" if current else "Utwórz", type="primary", use_container_width=True,
+                    key=_prefix(spec.key) + "save")
+            with right:
+                st.form_submit_button("Anuluj", use_container_width=True, on_click=_close, args=(spec.key,), key=_prefix(spec.key) + "cancel")
         if spec.table in {"LectureGroups", "SubjectsSemesters"} and draft.get("SemesterId"):
-            rows = service.choices(token, spec.key, "SemesterId")
+            rows = choice_rows['SemesterId'] if choice_rows is not None else service.choices(token, spec.key, "SemesterId")
             semester = next((row for row in rows if str(row["Id"]) == str(draft["SemesterId"])), None)
             if semester:
                 duration = (_as_date(semester["EndDate"]) - _as_date(semester["StartDate"])).days
@@ -120,12 +140,6 @@ def _render_editor(service, token, spec, current):
         if spec.table == "SemesterCalendarDates" and draft.get("Date"):
             day = ("poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota", "niedziela")[draft["Date"].weekday()]
             st.text_input("Dzień tygodnia", value=day, disabled=True, key=_prefix(spec.key) + "day")
-        left, right = st.columns([3, 1])
-        with left:
-            submitted = st.button("Zapisz zmiany" if current else "Utwórz", type="primary", use_container_width=True,
-                key=_prefix(spec.key) + "save")
-        with right:
-            st.button("Anuluj", use_container_width=True, on_click=_close, args=(spec.key,), key=_prefix(spec.key) + "cancel")
         if submitted:
             try:
                 if current:
@@ -156,46 +170,56 @@ def _render_generation(service, token, spec):
     with st.expander("Wybierz przedmioty z programu nauczania"):
         st.caption("Wybierz program obowiązujący na początku semestru. Lista obejmie przedmioty wspólne i wybraną specjalizację. Godziny planowane pochodzą z programu; istniejące realizacje są zachowywane.")
         criteria = {}
-        criteria_fields = (
-            ("semester_id", "Semestr", "subjects_semesters", "SemesterId"),
-            ("program_id", "Program nauczania", "subjects", "ProgramsOfStudyId"),
-            ("studies_id", "Rodzaj studiów", "subjects", "StudiesId"),
-            ("specialization_id", "Specjalizacja", "subjects", "SpecializationId"),
-        )
-        for name, label, key, field_name in criteria_fields:
-            try:
-                rows = service.generation_choices(token, name)
-            except ApplicationError as error:
-                st.error(str(error))
-                return
-            rows = [row for row in rows if row.get("IsActive", True)]
-            if name == "specialization_id" and criteria.get("studies_id"):
-                rows = [row for row in rows if str(row.get("StudiesId")) == str(criteria["studies_id"])]
-            lookup = {str(row["Id"]): row["_label"] + " · " + str(row["Id"])[:8] for row in rows}
-            placeholder = "Bez specjalizacji" if name == "specialization_id" else "Wybierz…"
-            criteria[name] = st.selectbox(label, [None] + list(lookup), format_func=lambda item, names=lookup, empty=placeholder: names.get(item, empty),
-                key="subject_generation_" + name)
-        criteria["semester_number"] = st.number_input("Numer semestru studiów", min_value=1, value=None, step=1, key="subject_generation_number")
-        hybrid_hours = st.number_input("Godziny hybrydowe dla generowanych realizacji", min_value=0, max_value=255, value=0, step=1, key="subject_generation_hybrid")
+        studies = service.generation_choices(token, "studies_id")
+        study_labels = {str(row["Id"]): row["_label"] + " · " + str(row["Id"])[:8]
+                        for row in studies if row.get("IsActive", True)}
+        criteria["studies_id"] = st.selectbox("Rodzaj studiów", [None] + list(study_labels),
+            format_func=lambda value: study_labels.get(value, "Wybierz…"), key="subject_generation_studies_id")
+        with st.form("subject_generation_form", border=False):
+            for name, label in (("semester_id", "Semestr"), ("program_id", "Program nauczania"),
+                                ("specialization_id", "Specjalizacja")):
+                rows = [row for row in service.generation_choices(token, name) if row.get("IsActive", True)]
+                if name == "specialization_id" and criteria["studies_id"]:
+                    rows = [row for row in rows if str(row.get("StudiesId")) == criteria["studies_id"]]
+                labels = {str(row["Id"]): row["_label"] + " · " + str(row["Id"])[:8] for row in rows}
+                placeholder = "Bez specjalizacji" if name == "specialization_id" else "Wybierz…"
+                criteria[name] = st.selectbox(label, [None] + list(labels),
+                    format_func=lambda item, names=labels, empty=placeholder: names.get(item, empty),
+                    key="subject_generation_" + name)
+            criteria["semester_number"] = st.number_input("Numer semestru studiów", min_value=1,
+                value=None, step=1, key="subject_generation_number")
+            hybrid_hours = st.number_input("Godziny hybrydowe dla generowanych realizacji", min_value=0,
+                max_value=255, value=0, step=1, key="subject_generation_hybrid")
+            preview = st.form_submit_button("Pokaż przedmioty", key="subject_generation_preview")
+            generate = False
+            if service.can(token, spec.key, "create"):
+                generate = st.form_submit_button("Utwórz przedmioty w semestrze", type="primary",
+                    key="subject_generation_save")
         ready = all(criteria.get(key) is not None for key in ("semester_id", "program_id", "studies_id", "semester_number"))
-        if ready:
+        if preview or generate:
+            if not ready:
+                st.error("Wybierz semestr, program, studia i numer semestru studiów.")
+                return
+            if generate:
+                try:
+                    result = service.generate_subjects(token, **criteria, hybrid_hours=hybrid_hours)
+                except ApplicationError as error:
+                    st.error(str(error))
+                    return
+                st.session_state[_prefix(spec.key) + "notice"] = f"Utworzono realizacji: {len(result.created)}. Już istniejące: {result.already_existing}."
+                st.rerun()
+            st.session_state["subject_generation_preview_criteria"] = criteria
+        if saved := st.session_state.get("subject_generation_preview_criteria"):
             try:
-                subjects = service.preview_subjects(token, **criteria)
+                subjects = service.preview_subjects(token, **saved)
             except ApplicationError as error:
                 st.error(str(error))
                 return
             if not subjects:
-                st.info("Brak przedmiotów odpowiadających wybranym kryteriom.")
+                st.info("Brak przedmiotów odpowiadających kryteriom podglądu.")
             else:
-                st.dataframe([{"Przedmiot": row["_label"], "Liczba godzin z programu": row.get("NumberOfHours")} for row in subjects], hide_index=True, use_container_width=True)
-                if service.can(token, spec.key, "create") and st.button("Utwórz przedmioty w semestrze", type="primary", key="subject_generation_save"):
-                    try:
-                        result = service.generate_subjects(token, **criteria, hybrid_hours=hybrid_hours)
-                    except ApplicationError as error:
-                        st.error(str(error))
-                        return
-                    st.session_state[_prefix(spec.key) + "notice"] = f"Utworzono realizacji: {len(result.created)}. Już istniejące: {result.already_existing}."
-                    st.rerun()
+                st.dataframe([{"Przedmiot": row["_label"], "Liczba godzin z programu": row.get("NumberOfHours")}
+                              for row in subjects], hide_index=True, use_container_width=True)
 
 
 def render_catalogs(service, token: str, entity_key: str):

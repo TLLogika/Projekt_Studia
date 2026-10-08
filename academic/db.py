@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 import re
+from copy import deepcopy
+from threading import RLock
 from contextlib import contextmanager
 from typing import Any, Iterator
 from uuid import UUID
@@ -57,6 +59,8 @@ def _odbc_value(value: str) -> str:
 class Database:
     def __init__(self, settings: Settings):
         self.settings = settings
+        self._columns_cache = {}
+        self._columns_lock = RLock()
 
     def _connect(self):
         settings = self.settings
@@ -139,6 +143,11 @@ class Database:
             return check(conn)
 
     def columns(self, table: str, schema: str = "org", connection=None) -> dict[str, dict]:
+        cache_key = (schema, table)
+        with self._columns_lock:
+            if cache_key in self._columns_cache:
+                return deepcopy(self._columns_cache[cache_key])
+
         def inspect(conn):
             rows = query(
                 conn,
@@ -148,7 +157,12 @@ class Database:
                 "FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=? AND TABLE_NAME=?",
                 (schema, table),
             )
-            return {row["COLUMN_NAME"]: row for row in rows}
+            result = {row["COLUMN_NAME"]: row for row in rows}
+            if result:
+                # Schemat jest niezmienny; cache znika przy restarcie procesu.
+                with self._columns_lock:
+                    self._columns_cache[cache_key] = deepcopy(result)
+            return result
 
         if connection is not None:
             return inspect(connection)

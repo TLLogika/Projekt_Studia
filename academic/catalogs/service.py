@@ -78,7 +78,10 @@ class CatalogService:
                 if field.reference:
                     cache_key = (field.reference, depth + 1)
                     if cache_key not in cache:
-                        references = list_records(connection, field.reference)
+                        raw_key = ('rows', field.reference)
+                        if raw_key not in cache:
+                            cache[raw_key] = list_records(connection, field.reference)
+                        references = cache[raw_key]
                         cache[cache_key] = self._decorate(connection, field.reference, references, depth + 1, cache)
                     references = cache[cache_key]
                     reference_maps[field.name] = {str(row["Id"]): row["_label"] for row in references}
@@ -140,6 +143,21 @@ class CatalogService:
                 if len(value) != 5 or parsed.second or parsed.microsecond:
                     raise ValidationError(f"{field.label}: podaj godzinę w formacie GG:MM.")
         return data
+
+    def editor_choices(self, token: str, entity_key: str) -> dict[str, list[dict]]:
+        """Wszystkie listy formularza w jednym połączeniu, z wspólnymi relacjami."""
+        spec = self._spec(entity_key)
+        with self.db.connection() as connection:
+            self.auth.require(token, spec.item_code, 'view', connection=connection)
+            cache, result = {}, {}
+            for field in spec.fields:
+                if field.reference:
+                    raw_key = ('rows', field.reference)
+                    if raw_key not in cache:
+                        cache[raw_key] = list_records(connection, field.reference)
+                    rows = self._decorate(connection, field.reference, cache[raw_key], cache=cache)
+                    result[field.name] = sorted(rows, key=lambda row: (row['_label'].casefold(), str(row['Id'])))
+            return result
 
     def _relations(self, connection, spec, data, current=None):
         references = {}

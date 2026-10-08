@@ -148,6 +148,12 @@ def auth_environment(monkeypatch):
             return list(state.hashes)
         if "SELECT DISTINCT r.Code" in sql:
             return list(state.roles)
+        if "CROSS JOIN (VALUES" in sql:
+            return [{"Id": item['Code'], "ParentItemId": None, "Route": '/', "ComponentKey": item['Code'],
+                     "SortOrder": 0, "ShowInMenu": item.get('ShowInMenu', True), **item,
+                     "ActionCode": action, **(state.decisions.get(item['Code']) or
+                     {"HasDeny": 0, "HasAllow": 0, "HasRole": 0})}
+                    for item in state.menu for action in ('view','create','update')]
         if "FROM org.SystemItems WHERE" in sql:
             return list(state.menu)
         raise AssertionError(f"Unexpected query: {sql}")
@@ -370,3 +376,31 @@ def test_malformed_tokens_cannot_authorize(auth_environment):
     for token in (None, "", "x", "\ud800" * 32, "x" * 129):
         assert not auth.can(token, "semesters", "view")
         auth.logout(token)
+
+
+def test_ui_presentation_fetches_all_actions_in_one_connection_and_respects_denies(auth_environment):
+    db, state, auth = auth_environment
+    token = auth.login('test-user', PASSWORD)
+    state.menu += [{'Code': 'denied', 'Name': 'Denied'}, {'Code': 'hidden', 'Name': 'Hidden', 'ShowInMenu': False}]
+    state.decisions['denied'] = {'HasDeny': 1, 'HasAllow': 1, 'HasRole': 1}
+    state.decisions['hidden'] = {'HasDeny': 0, 'HasAllow': 0, 'HasRole': 1}
+    opens, queries = db.opens, len(state.queries)
+    user, menu, permissions = auth.presentation(token)
+    assert db.opens == opens + 1
+    assert len(state.queries) == queries + 3  # account, role names, all ACL/menu
+    assert user.person_id == state.account['PersonId']
+    assert [item['Code'] for item in menu] == ['semesters']
+    assert permissions[('semesters', 'create')]
+    assert permissions[('hidden', 'update')]
+    assert not permissions[('denied', 'view')]
+    state.decisions['semesters'] = {'HasDeny': 0, 'HasAllow': 0, 'HasRole': 0}
+    assert not auth.presentation(token)[2][('semesters', 'create')]
+
+
+def test_presentation_still_revokes_session_if_account_is_disabled(auth_environment):
+    _, state, auth = auth_environment
+    token = auth.login('test-user', PASSWORD)
+    auth.presentation(token)
+    state.account_active = False
+    with pytest.raises(AuthenticationError):
+        auth.presentation(token)

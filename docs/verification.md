@@ -32,3 +32,22 @@ zbioru danych dydaktycznych. Testy potwierdzają logikę na odizolowanych fixtur
 i zgodność zapytań z bazą. Nie potwierdzają importu konkretnego, niedostarczonego
 arkusza ani pełnego procesu zapisu zajęć online. Rozbieżności diagramu i schematu
 są wyszczególnione w [requirements.md](requirements.md).
+
+## Optymalizacja odczytów i formularzy
+
+- **285 testów przeszło** po dodaniu cache i formularzy. Dodatkowe przypadki
+  sprawdzają izolację sesji i zakresów kalendarza, odmowy przed odczytem cache,
+  aktualną autoryzację zapisu, unieważnianie danych innych użytkowników,
+  odświeżanie ręczne, kopie metadanych oraz generator podgląd/zapis.
+- Pomiar tylko do odczytu na rzeczywistym SQL Server dla ekranu typów przedmiotów:
+  pierwotne pobranie profilu, menu, listy i akcji wykonywało **27 zapytań / 5
+  połączeń**, średnio **3,433 s**. Po rozgrzaniu cache: **3 zapytania / 1 połączenie**,
+  średnio **0,377 s**. Każdy wariant mierzono trzykrotnie i porównano wyniki danych
+  oraz uprawnień. Są to wyniki tego pomiaru, nie gwarancja stałego czasu sieci.
+- Odczyt przy tym pomiarze wykazał **0 aktywnych rekordów org.Studies**.
+  Użytkownik musi utworzyć lub aktywować właściwe studia, by wypełnić StudiesId.
+- Chromium potwierdził, że wpisanie nazwy i przełączenie aktywności wewnątrz
+  formularza grupy wysyła **0 żądań do serwera**. Anulowanie formularza odrzuca
+  robocze pola. Sprawdzono też formularz Studia i jego zależności oraz nawigację
+  importu, kalendarza i notatek po włączeniu cache, bez wyjątków JavaScript lub
+  Streamlit i bez zapisywania danych dydaktycznych.

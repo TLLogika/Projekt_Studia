@@ -20,6 +20,16 @@ FIELD_LABELS = {
 }
 
 
+@st.cache_data(ttl=600, max_entries=8, show_spinner=False)
+def _read_uploaded_table(session_key, content, filename, reader_options):
+    return read_table(content, filename, **reader_options)
+
+
+@st.cache_data(ttl=600, max_entries=8, show_spinner=False)
+def _uploaded_sheets(session_key, content):
+    return sheet_names(content)
+
+
 def _choice(label, rows, name_field, *, key, optional=False):
     by_id = {str(row["Id"]): row for row in rows}
     return st.selectbox(label, ([None] if optional else []) + list(by_id), index=0 if optional else None,
@@ -52,13 +62,13 @@ def render_importing(service, token):
         with st.expander("Odczyt pliku", expanded=True):
             reader_options["header_row"] = int(st.number_input("Wiersz z nazwami kolumn", min_value=1, max_value=10000, step=1, key="import.header." + digest))
             if uploaded.name.lower().endswith(".xlsx"):
-                reader_options["sheet"] = st.selectbox("Arkusz", sheet_names(content), index=None, placeholder="Wybierz arkusz", key="import.sheet." + digest)
+                reader_options["sheet"] = st.selectbox("Arkusz", _uploaded_sheets(sha256(token.encode()).hexdigest(), content), index=None, placeholder="Wybierz arkusz", key="import.sheet." + digest)
                 if reader_options["sheet"] is None:
                     return
             else:
                 reader_options["delimiter"] = st.selectbox("Separator CSV", [";", ",", "\t"], format_func=lambda value: "Tabulator" if value == "\t" else value, key="import.separator." + digest)
                 reader_options["encoding"] = st.selectbox("Kodowanie CSV", ["utf-8-sig", "cp1250"], key="import.encoding." + digest)
-        table = read_table(content, uploaded.name, **reader_options)
+        table = _read_uploaded_table(sha256(token.encode()).hexdigest(), content, uploaded.name, reader_options)
         st.caption(f"Odczytano {len(table.rows)} wierszy. Poniżej pierwsze 20 wierszy wybranego pliku.")
         st.dataframe([row.values for row in table.rows[:20]], hide_index=True, use_container_width=True)
         mapped = {}

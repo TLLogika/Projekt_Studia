@@ -61,8 +61,8 @@ def _render_editor(
     token: str,
     semester: Semester | None,
 ) -> None:
-    """Keep dates reactive so the read-only duration updates before saving."""
-    with st.container(border=True):
+    """Zbierz zmiany i wyślij je dopiero po zatwierdzeniu formularza."""
+    with st.form("semester_editor_form", border=True):
         st.subheader("Edytowanie semestru" if semester else "Dodawanie semestru")
         name = st.text_input(
             "Nazwa semestru",
@@ -120,14 +120,14 @@ def _render_editor(
             )
         save_column, cancel_column = st.columns([3, 1])
         with save_column:
-            submitted = st.button(
+            submitted = st.form_submit_button(
                 "Zapisz zmiany" if semester else "Utwórz semestr",
                 type="primary",
                 use_container_width=True,
                 key="semester_save",
             )
         with cancel_column:
-            st.button(
+            st.form_submit_button(
                 "Anuluj",
                 use_container_width=True,
                 on_click=_close_editor,

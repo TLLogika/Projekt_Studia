@@ -2,7 +2,9 @@
 
 Modularna aplikacja Python/Streamlit oparta na materiałach w `sources` i istniejącej
 bazie SQL Server `Cuda-BIS`, schemat `org`. Odczyty i zatwierdzone zapisy wykonują
-zapytania do bazy online. Aplikacja nie tworzy tabel, migracji ani danych demonstracyjnych.
+zapytania do bazy online. Listy i opcje formularzy są buforowane przez maksymalnie
+120 sekund; zapisy zawsze trafiają do SQL Server i odświeżają cache.
+Aplikacja nie tworzy tabel, migracji ani danych demonstracyjnych.
 Powiązanie wymagań z kodem: [docs/requirements.md](docs/requirements.md).
 
 ## Uruchomienie
@@ -91,6 +93,31 @@ Zakresy kalendarza: `calendar.dean`, `calendar.teacher`, `calendar.student`, akc
 W `sources` nie ma rzeczywistego arkusza planu ani kompletu danych dydaktycznych.
 Importu własnego planu nie można zweryfikować bez tego pliku i jego rekordów w bazie.
 Aplikacja nie uzupełnia tych braków przykładowymi zajęciami.
+
+## StudiesId i szybkość formularzy
+
+`StudiesId` jest identyfikatorem istniejących studiów. W formularzach grup i
+przedmiotów wybierz je po nazwie w polu **Rodzaj studiów**; UUID przypisze aplikacja.
+Jeżeli lista jest pusta, w **Słowniki** uzupełnij **Kierunki studiów**, **Tryby
+studiów** i **Stopnie studiów**, a następnie **Studia**. Studia wymagają nazwy,
+skrótu, kierunku, trybu, stopnia, daty rozpoczęcia i liczby semestrów. Włącz
+**Aktywny** i kliknij **Utwórz**. Po zapisie nowa pozycja jest dostępna w powiązanych
+formularzach. Istniejący nieaktywny rekord można edytować i włączyć.
+
+Pola formularzy są wysyłane razem przy **Utwórz/Zapisz zmiany**. Wybór studiów,
+semestru lub organizacji pozostaje reaktywny tam, gdzie określa dostępne opcje
+innych pól. Obliczenia dat pojawiają się po zatwierdzeniu danych formularza.
+**Anuluj** odrzuca zmiany. Generator ma osobny przycisk **Pokaż przedmioty**;
+wyświetlenie podglądu nie zapisuje realizacji.
+
+Listy, dane kalendarza i opcje wyboru są buforowane przez **120 sekund** osobno
+dla sesji użytkownika i zakresu uprawnień. Każdy udany zapis unieważnia cache
+wszystkich użytkowników tego procesu aplikacji. Dla zmian wprowadzonych poza
+aplikacją użyj **Odśwież dane** w lewym menu albo poczekaj na wygaśnięcie cache.
+Uprawnienia menu są odczytywane przy każdym renderowaniu w jednym połączeniu;
+każdy zapis ponownie sprawdza aktualne uprawnienia, relacje i wersję w bazie.
+Metadane niezmiennego schematu są buforowane do restartu procesu, a odczyt
+przesłanego CSV/XLSX przez 10 minut w pamięci, oddzielnie dla sesji.
 
 ## Zgodność z bazą
 

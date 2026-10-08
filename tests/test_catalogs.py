@@ -391,6 +391,38 @@ def catalog_ui_app():
     render_catalogs(st.session_state["service"], "session", st.session_state["entity"])
 
 
+def test_editor_choices_reuse_reference_tables_instead_of_loading_each_field_separately(curriculum, monkeypatch):
+    service, _, _, _, _, _, _, make_subject = curriculum
+    make_subject()
+    calls = []
+    original = module.list_records
+    def count_reads(connection, table, *args, **kwargs):
+        calls.append(table)
+        return original(connection, table, *args, **kwargs)
+    monkeypatch.setattr(module, 'list_records', count_reads)
+    choices = service.editor_choices('session', 'subjects')
+    assert {'SubjectTypeId','ProgramsOfStudyId','StudiesId','SpecializationId'} == set(choices)
+    assert all(calls.count(table) == 1 for table in set(calls))
+    assert choices['StudiesId'][0]['NumberOfSemesters'] == 6
+
+
+def test_generator_form_previews_without_writing_and_creates_only_on_submit(curriculum):
+    service, db, _, semester, program, studies, _, make_subject = curriculum
+    make_subject()
+    app = ui(service, 'subjects_semesters')
+    app.selectbox(key='subject_generation_studies_id').set_value(studies['Id']).run()
+    app.selectbox(key='subject_generation_semester_id').set_value(semester['Id'])
+    app.selectbox(key='subject_generation_program_id').set_value(program['Id'])
+    app.number_input(key='subject_generation_number').set_value(1)
+    app.button(key='subject_generation_preview').click().run()
+    assert not app.exception
+    assert len(app.dataframe) == 1
+    assert db.writes == []
+    app.button(key='subject_generation_save').click().run()
+    assert not app.exception
+    assert len(db.rows['SubjectsSemesters']) == 1
+
+
 def ui(service, entity):
     app = AppTest.from_function(catalog_ui_app)
     app.session_state["service"] = service

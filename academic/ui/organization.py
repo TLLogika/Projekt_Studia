@@ -35,7 +35,7 @@ def _open(row=None):
 
 
 def _editor(service, token, semester, lookups, snapshot):
-    with st.container(border=True):
+    with st.form("organization_editor_form", border=True):
         st.subheader("Edytowanie organizacji semestru" if snapshot else "Dodawanie organizacji semestru")
         subject = choose_record("Przedmiot w semestrze", lookups.get("SubjectsSemesters", []),
             key="organization_editor_subject", field="SubjectName", selected=snapshot.get("SubjectsSemesterId"))
@@ -48,10 +48,10 @@ def _editor(service, token, semester, lookups, snapshot):
             placeholder="Nadawany automatycznie", disabled=True, key="organization_editor_timestamp")
         left, right = st.columns([3, 1])
         with left:
-            saved = st.button("Zapisz zmiany" if snapshot else "Utwórz przydział", type="primary",
+            saved = st.form_submit_button("Zapisz zmiany" if snapshot else "Utwórz przydział", type="primary",
                               key="organization_editor_save", use_container_width=True)
         with right:
-            st.button("Anuluj", on_click=_close, key="organization_editor_cancel", use_container_width=True)
+            st.form_submit_button("Anuluj", on_click=_close, key="organization_editor_cancel", use_container_width=True)
         if saved:
             try:
                 values = {"SubjectsSemesterId": subject, "LectureGroupId": group, "TeacherId": teacher, "IsActive": active}

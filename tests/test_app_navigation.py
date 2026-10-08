@@ -140,7 +140,7 @@ def test_clean_start_and_all_registered_navigation_branches(navigation):
             assert any(call[:2] == ("catalog", "list") and call[2][-1] == module.key for call in rendered)
         # Auth fixtures grant only view; every rendered branch must hide all
         # write buttons while retaining navigation and the logout button.
-        assert all(str(button.key).startswith("nav_") or button.label in {"Główna", "Wyloguj się"}
+        assert all(str(button.key).startswith("nav_") or button.label in {"Główna", "Wyloguj się", "Odśwież dane", "Pokaż przedmioty"}
                    for button in app.button), module.key
 
 

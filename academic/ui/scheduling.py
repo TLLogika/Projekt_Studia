@@ -41,28 +41,29 @@ def _editor(service, token, semester_id, snapshot, lookups):
         except ApplicationError as error:
             st.error(str(error))
             return
-        dates = [dict(row, Label=f"{_date_text(row['Date'])} · zjazd {row['Number']}") for row in choices.get("Dates", [])]
-        hours = [dict(row, Label=f"{row.get('StartHour') or '—'}–{row.get('EndHour') or '—'} · godzina {row['Number']}")
-                 for row in choices.get("Hours", [])]
-        day = choose_record("Data / zjazd", dates, field="Label", key="schedule_editor_date", selected=snapshot.get("SemesterCalendarDateId"))
-        hour = choose_record("Godzina", hours, field="Label", key="schedule_editor_hour", selected=snapshot.get("DailyScheduleId"))
-        teacher = choose_record("Dodatkowy wykładowca", lookups["Teachers"], field="TeacherName", optional=True,
-            key="schedule_editor_teacher", selected=snapshot.get("TeacherId"))
-        room = st.text_input("Sala", value=snapshot.get("LectureRoomName") or "", key="schedule_editor_room")
-        if makeup:
-            completed, canceled, active = False, False, True
-        else:
-            completed = st.toggle("Czy wykonane", value=bool(snapshot.get("IsComplited", False)), key="schedule_editor_completed")
-            canceled = st.toggle("Czy odwołane", value=bool(snapshot.get("IsCanceled", False)), key="schedule_editor_canceled")
-            active = st.toggle("Czy aktywne", value=bool(snapshot.get("IsActive", True)), key="schedule_editor_active")
-        st.text_input("Znacznik czasu (Timestamp)", value=timestamp_text(snapshot.get("Timestamp")),
-            disabled=True, placeholder="Nadawany automatycznie", key="schedule_editor_timestamp")
-        left, right = st.columns([3, 1])
-        with left:
-            submit = st.button("Zapisz odróbkę" if makeup else "Zapisz zmiany" if snapshot else "Utwórz godzinę",
-                type="primary", key="schedule_editor_save", use_container_width=True)
-        with right:
-            st.button("Anuluj", on_click=_close, key="schedule_editor_cancel", use_container_width=True)
+        with st.form("schedule_editor_form", border=False):
+            dates = [dict(row, Label=f"{_date_text(row['Date'])} · zjazd {row['Number']}") for row in choices.get("Dates", [])]
+            hours = [dict(row, Label=f"{row.get('StartHour') or '—'}–{row.get('EndHour') or '—'} · godzina {row['Number']}")
+                     for row in choices.get("Hours", [])]
+            day = choose_record("Data / zjazd", dates, field="Label", key="schedule_editor_date", selected=snapshot.get("SemesterCalendarDateId"))
+            hour = choose_record("Godzina", hours, field="Label", key="schedule_editor_hour", selected=snapshot.get("DailyScheduleId"))
+            teacher = choose_record("Dodatkowy wykładowca", lookups["Teachers"], field="TeacherName", optional=True,
+                key="schedule_editor_teacher", selected=snapshot.get("TeacherId"))
+            room = st.text_input("Sala", value=snapshot.get("LectureRoomName") or "", key="schedule_editor_room")
+            if makeup:
+                completed, canceled, active = False, False, True
+            else:
+                completed = st.toggle("Czy wykonane", value=bool(snapshot.get("IsComplited", False)), key="schedule_editor_completed")
+                canceled = st.toggle("Czy odwołane", value=bool(snapshot.get("IsCanceled", False)), key="schedule_editor_canceled")
+                active = st.toggle("Czy aktywne", value=bool(snapshot.get("IsActive", True)), key="schedule_editor_active")
+            st.text_input("Znacznik czasu (Timestamp)", value=timestamp_text(snapshot.get("Timestamp")),
+                disabled=True, placeholder="Nadawany automatycznie", key="schedule_editor_timestamp")
+            left, right = st.columns([3, 1])
+            with left:
+                submit = st.form_submit_button("Zapisz odróbkę" if makeup else "Zapisz zmiany" if snapshot else "Utwórz godzinę",
+                    type="primary", key="schedule_editor_save", use_container_width=True)
+            with right:
+                st.form_submit_button("Anuluj", on_click=_close, key="schedule_editor_cancel", use_container_width=True)
         if submit:
             draft = ScheduleInput(organization_id, day, hour, teacher, room, active, canceled, completed)
             try:

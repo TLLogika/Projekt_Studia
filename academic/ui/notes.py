@@ -42,26 +42,27 @@ def _editor(service, token, note):
         names = {str(row["Id"]): row["_label"] + " · " + str(row["Id"])[:8] for row in rows}
         ids = [None] + list(names)
         current_id = str(note["TableId"]) if note and table == current_table else None
-        target_id = st.selectbox("Rekord", ids, index=ids.index(current_id) if current_id in ids else 0,
-            format_func=lambda value: names.get(value, "Wybierz…"), key="note_field_TableId")
-        if table and not rows:
-            st.caption("Brak rekordów w wybranym katalogu.")
-        comment = st.text_area("Treść notatki", value=note.get("Comment") or "" if note else "", key="note_field_Comment")
-        pin = st.toggle("Przypięta", value=bool(note.get("Pin")) if note else False, key="note_field_Pin")
-        active = st.toggle("Aktywna", value=bool(note.get("IsActive")) if note else True, key="note_field_IsActive")
-        for field, label, formatter in (
-            ("CreatedBy", "Autor", str), ("CreatedAt", "Utworzono", _date),
-            ("ModifiedBy", "Ostatnio zmienił", str), ("ModifiedAt", "Ostatnia zmiana", _date),
-            ("Timestamp", "Znacznik czasu (Timestamp)", _timestamp),
-        ):
-            value = note.get(field) if note else None
-            st.text_input(label, value=formatter(value) if value is not None else "", disabled=True,
-                placeholder="Nadawane automatycznie", key="note_readonly_" + field)
-        left, right = st.columns([3, 1])
-        with left:
-            save = st.button("Zapisz zmiany" if note else "Utwórz notatkę", type="primary", use_container_width=True, key="note_save")
-        with right:
-            st.button("Anuluj", on_click=_close, use_container_width=True, key="note_cancel")
+        with st.form("note_editor_form", border=False):
+            target_id = st.selectbox("Rekord", ids, index=ids.index(current_id) if current_id in ids else 0,
+                format_func=lambda value: names.get(value, "Wybierz…"), key="note_field_TableId")
+            if table and not rows:
+                st.caption("Brak rekordów w wybranym katalogu.")
+            comment = st.text_area("Treść notatki", value=note.get("Comment") or "" if note else "", key="note_field_Comment")
+            pin = st.toggle("Przypięta", value=bool(note.get("Pin")) if note else False, key="note_field_Pin")
+            active = st.toggle("Aktywna", value=bool(note.get("IsActive")) if note else True, key="note_field_IsActive")
+            for field, label, formatter in (
+                ("CreatedBy", "Autor", str), ("CreatedAt", "Utworzono", _date),
+                ("ModifiedBy", "Ostatnio zmienił", str), ("ModifiedAt", "Ostatnia zmiana", _date),
+                ("Timestamp", "Znacznik czasu (Timestamp)", _timestamp),
+            ):
+                value = note.get(field) if note else None
+                st.text_input(label, value=formatter(value) if value is not None else "", disabled=True,
+                    placeholder="Nadawane automatycznie", key="note_readonly_" + field)
+            left, right = st.columns([3, 1])
+            with left:
+                save = st.form_submit_button("Zapisz zmiany" if note else "Utwórz notatkę", type="primary", use_container_width=True, key="note_save")
+            with right:
+                st.form_submit_button("Anuluj", on_click=_close, use_container_width=True, key="note_cancel")
         if save:
             if not table or not target_id:
                 st.error("Wybierz obiekt i rzeczywisty rekord notatki.")
